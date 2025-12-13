@@ -691,6 +691,8 @@ namespace MonoTorrent.Client
             if (!ContainingDirectory.StartsWith (SavePath))
                 throw new InvalidOperationException ($"The containing directory path '{ContainingDirectory}' must be a subdirectory of '{SavePath}'.");
 
+            var containingDirectoryExists = Directory.Exists (ContainingDirectory);
+
             // All files marked as 'Normal' priority by default so 'PartialProgressSelector'
             // should be set to 'true' for each piece as all files are being downloaded.
             Files = Torrent.Files.Select (file => {
@@ -700,15 +702,18 @@ namespace MonoTorrent.Client
                 var downloadCompleteFullPath = paths.completePath;
                 var downloadIncompleteFullPath = paths.incompletePath;
 
+                var downloadCompleteFullPathExists = File.Exists (downloadCompleteFullPath);
                 // FIXME: Is this the best place to futz with actually moving files?
                 if (!Engine!.Settings.UsePartialFiles) {
-                    if (File.Exists (downloadIncompleteFullPath) && !File.Exists (downloadCompleteFullPath))
+                    if (containingDirectoryExists && File.Exists (downloadIncompleteFullPath) && !downloadCompleteFullPathExists) {
                         File.Move (downloadIncompleteFullPath, downloadCompleteFullPath);
+                        downloadCompleteFullPathExists = true;
+                    }
 
                     downloadIncompleteFullPath = downloadCompleteFullPath;
                 }
 
-                var currentPath = File.Exists (downloadCompleteFullPath) ? downloadCompleteFullPath : downloadIncompleteFullPath;
+                var currentPath = containingDirectoryExists && downloadCompleteFullPathExists ? downloadCompleteFullPath : downloadIncompleteFullPath;
                 var torrentFileInfo = new TorrentFileInfo (file, currentPath);
                 torrentFileInfo.UpdatePaths ((currentPath, downloadCompleteFullPath, downloadIncompleteFullPath));
                 return torrentFileInfo;
