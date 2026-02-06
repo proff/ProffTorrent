@@ -314,15 +314,11 @@ namespace MonoTorrent.Client
 
         internal async Task<bool> CheckFileExistsAsync (ITorrentManagerFile file)
         {
-            await IOLoop;
-
             return await Cache.Writer.ExistsAsync (file).ConfigureAwait (false);
         }
 
         internal async Task<bool> CheckAnyFilesExistAsync (ITorrentManagerInfo manager)
         {
-            await IOLoop;
-
             for (int i = 0; i < manager.Files.Count; i++)
                 if (await Cache.Writer.ExistsAsync (manager.Files[i]).ConfigureAwait (false))
                     return true;
@@ -729,13 +725,11 @@ namespace MonoTorrent.Client
 
         internal async ReusableTask<long?> GetLengthAsync (ITorrentManagerFile file)
         {
-            await IOLoop;
             return await Cache.Writer.GetLengthAsync (file);
         }
 
         internal async ReusableTask<bool> SetLengthAsync (ITorrentManagerFile file, long length)
         {
-            await IOLoop;
             return await Cache.Writer.SetLengthAsync (file, length);
         }
     }
