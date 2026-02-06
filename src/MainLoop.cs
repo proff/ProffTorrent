@@ -29,6 +29,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -37,7 +38,7 @@ using System.Threading;
 
 namespace MonoTorrent.Client
 {
-    internal class MainLoop : SynchronizationContext, INotifyCompletion
+    internal class MainLoop : SynchronizationContext, INotifyCompletion, IDisposable
     {
         static readonly ICache<CacheableManualResetEventSlim> cache = new SynchronizedCache<CacheableManualResetEventSlim>(() => new CacheableManualResetEventSlim());
 
@@ -59,8 +60,9 @@ namespace MonoTorrent.Client
             }
         }
 
-        Queue<QueuedTask> actions = new Queue<QueuedTask>();
-        readonly object actionsLock = new object();
+        ConcurrentQueue<QueuedTask> actions = new ConcurrentQueue<QueuedTask> ();
+        AutoResetEvent actionsAutoResetEvent = new AutoResetEvent (false);
+        bool disposed;
         readonly Thread thread;
 
         public MainLoop(string name)
@@ -75,41 +77,31 @@ namespace MonoTorrent.Client
 
         void Loop()
         {
-            var currentQueue = new Queue<QueuedTask>();
-
             SetSynchronizationContext(this);
 #if ALLOW_EXECUTION_CONTEXT_SUPPRESSION
             using (ExecutionContext.SuppressFlow ())
 #endif
             while (true)
             {
-
-                lock (actionsLock)
-                {
-                    if (actions.Count == 0)
-                        Monitor.Wait(actionsLock);
-
-                    var swap = actions;
-                    actions = currentQueue;
-                    currentQueue = swap;
+                if (disposed)
+                    return;
+                if (!actions.TryDequeue (out QueuedTask task)) {
+                    actionsAutoResetEvent.WaitOne ();
+                    continue;
                 }
 
-                while (currentQueue.Count > 0)
+                try
                 {
-                    var task = currentQueue.Dequeue();
-                    try
-                    {
-                        task.Action?.Invoke();
-                        task.SendOrPostCallback?.Invoke(task.State);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine("Unexpected main loop exception: {0}", ex);
-                    }
-                    finally
-                    {
-                        task.WaitHandle?.Set();
-                    }
+                    task.Action?.Invoke ();
+                    task.SendOrPostCallback?.Invoke (task.State);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine ("Unexpected main loop exception: {0}", ex);
+                }
+                finally
+                {
+                    task.WaitHandle?.Set ();
                 }
             }
         }
@@ -141,12 +133,8 @@ namespace MonoTorrent.Client
 
         void Queue(QueuedTask task)
         {
-            lock (actionsLock)
-            {
-                actions.Enqueue(task);
-                if (actions.Count == 1)
-                    Monitor.Pulse(actionsLock);
-            }
+            actions.Enqueue(task);
+            actionsAutoResetEvent.Set();
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -222,5 +210,18 @@ namespace MonoTorrent.Client
         }
 
         #endregion
+
+        public void Dispose ()
+        {
+            //stop thread
+            disposed = true;
+            actionsAutoResetEvent.Set();
+            GC.SuppressFinalize(this);
+        }
+
+        ~MainLoop ()
+        {
+            Dispose();
+        }
     }
 }

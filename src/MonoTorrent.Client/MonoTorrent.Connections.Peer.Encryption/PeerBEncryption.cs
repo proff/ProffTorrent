@@ -45,9 +45,9 @@ namespace MonoTorrent.Connections.Peer.Encryption
     {
         public byte[] InitialData { get; private set; }
 
-        InfoHash[] PossibleSKEYs { get; }
+        IEnumerable<InfoHash> PossibleSKEYs { get; }
 
-        public PeerBEncryption (Factories factories, InfoHash[] possibleSKEYs, IList<EncryptionType> allowedEncryption)
+        public PeerBEncryption (Factories factories, IEnumerable<InfoHash> possibleSKEYs, IList<EncryptionType> allowedEncryption)
             : base (factories, allowedEncryption)
         {
             InitialData = Array.Empty<byte> ();
@@ -133,8 +133,8 @@ namespace MonoTorrent.Connections.Peer.Encryption
         /// <returns>true if a match has been found</returns>
         bool MatchSKEY (ReadOnlySpan<byte> torrentHash)
         {
-            for (int i = 0; i < PossibleSKEYs.Length; i++) {
-                byte[] req2 = Hash (Req2Bytes, PossibleSKEYs[i].Span.ToArray ());
+            foreach (var possibleSKEY in PossibleSKEYs) {
+                byte[] req2 = Hash (Req2Bytes, possibleSKEY.Span.ToArray ());
                 byte[] req3 = Hash (Req3Bytes, S!);
 
                 bool match = true;
@@ -142,7 +142,7 @@ namespace MonoTorrent.Connections.Peer.Encryption
                     match = torrentHash[j] == (req2[j] ^ req3[j]);
 
                 if (match) {
-                    SKEY = PossibleSKEYs[i];
+                    SKEY = possibleSKEY;
                     return true;
                 }
             }

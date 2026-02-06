@@ -34,7 +34,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-using MonoTorrent.BEncoding;
 using MonoTorrent.Client.Modes;
 using MonoTorrent.Client.RateLimiters;
 using MonoTorrent.Messages.Peer;
@@ -631,7 +630,7 @@ namespace MonoTorrent.Client
             CheckMetadata ();
 
             try {
-                var paths = TorrentFileInfo.GetNewPaths (Path.GetFullPath (path), Engine!.Settings.UsePartialFiles, file.Path == file.DownloadCompleteFullPath);
+                (SpanStringList path, SpanStringList completePath, SpanStringList incompletePath) paths = TorrentFileInfo.GetNewPaths (Path.GetFullPath (path), Engine!.Settings.UsePartialFiles, file.Path == file.DownloadCompleteFullPath);
                 await Engine!.DiskManager.MoveFileAsync (file, paths);
             } catch (Exception ex) {
                 TrySetError (Reason.WriteFailure, ex);
@@ -696,11 +695,10 @@ namespace MonoTorrent.Client
             // All files marked as 'Normal' priority by default so 'PartialProgressSelector'
             // should be set to 'true' for each piece as all files are being downloaded.
             Files = Torrent.Files.Select (file => {
-
                 // Generate the paths when 'UsePartialFiles' is enabled.
-                var paths = TorrentFileInfo.GetNewPaths (Path.Combine (ContainingDirectory, TorrentFileInfo.PathAndFileNameEscape (file.Path)), usePartialFiles: true, isComplete: true);
-                var downloadCompleteFullPath = paths.completePath;
-                var downloadIncompleteFullPath = paths.incompletePath;
+                var paths = TorrentFileInfo.GetNewPaths (ContainingDirectory, file.Path, true, true);
+                string downloadCompleteFullPath = paths.completePath;
+                string downloadIncompleteFullPath = paths.incompletePath;
 
                 var downloadCompleteFullPathExists = File.Exists (downloadCompleteFullPath);
                 // FIXME: Is this the best place to futz with actually moving files?
@@ -710,12 +708,12 @@ namespace MonoTorrent.Client
                         downloadCompleteFullPathExists = true;
                     }
 
-                    downloadIncompleteFullPath = downloadCompleteFullPath;
+                    paths.incompletePath = paths.completePath;
                 }
 
-                var currentPath = containingDirectoryExists && downloadCompleteFullPathExists ? downloadCompleteFullPath : downloadIncompleteFullPath;
+                SpanStringList currentPath = containingDirectoryExists && downloadCompleteFullPathExists ? paths.completePath : paths.incompletePath;
                 var torrentFileInfo = new TorrentFileInfo (file, currentPath);
-                torrentFileInfo.UpdatePaths ((currentPath, downloadCompleteFullPath, downloadIncompleteFullPath));
+                torrentFileInfo.UpdatePaths ((currentPath, paths.completePath, paths.incompletePath));
                 return torrentFileInfo;
             }).Cast<ITorrentManagerFile> ().ToList ().AsReadOnly ();
 
@@ -1033,7 +1031,7 @@ namespace MonoTorrent.Client
             for (int i = fileStartIndex; i < fileStartIndex + count; i++) {
                 var current = files[i].FullPath;
                 var completePath = files[i].DownloadCompleteFullPath;
-                var incompletePath = files[i].DownloadCompleteFullPath + (usePartialFiles ? TorrentFileInfo.IncompleteFileSuffix : "");
+                var incompletePath= usePartialFiles? files[i].DownloadCompleteFullPath.Append (TorrentFileInfo.IncompleteFileSuffix): files[i].DownloadCompleteFullPath;
 
                 if (files[i].BitField.AllTrue && files[i].FullPath != completePath) {
                     tasks ??= new List<Task> ();

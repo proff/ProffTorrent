@@ -314,15 +314,11 @@ namespace MonoTorrent.Client
 
         internal async Task<bool> CheckFileExistsAsync (ITorrentManagerFile file)
         {
-            await IOLoop;
-
             return await Cache.Writer.ExistsAsync (file).ConfigureAwait (false);
         }
 
         internal async Task<bool> CheckAnyFilesExistAsync (ITorrentManagerInfo manager)
         {
-            await IOLoop;
-
             for (int i = 0; i < manager.Files.Count; i++)
                 if (await Cache.Writer.ExistsAsync (manager.Files[i]).ConfigureAwait (false))
                     return true;
@@ -479,11 +475,15 @@ namespace MonoTorrent.Client
             }
         }
 
-        internal Task MoveFileAsync (ITorrentManagerFile file, (string newPath, string downloadComplete, string downloadIncomplete) paths)
-            => MoveFileAsync ((TorrentFileInfo) file, paths);
+        internal Task MoveFileAsync (ITorrentManagerFile file, (SpanStringList newPath, SpanStringList downloadComplete, SpanStringList downloadIncomplete) paths)
+        {
+            return MoveFileAsync ((TorrentFileInfo) file, paths);
+        }
 
-        internal Task MoveFileAsync (TorrentFileInfo file, (string newPath, string downloadComplete, string downloadIncomplete) paths)
-            => MoveFileAsync (file, paths, false);
+        internal Task MoveFileAsync (TorrentFileInfo file, (SpanStringList newPath, SpanStringList downloadComplete, SpanStringList downloadIncomplete) paths)
+        {
+            return MoveFileAsync (file, paths, false);
+        }
 
         internal async Task MoveFilesAsync (IList<ITorrentManagerFile> files, string newRoot, bool overwrite)
         {
@@ -493,7 +493,7 @@ namespace MonoTorrent.Client
             }
         }
 
-        async Task MoveFileAsync (TorrentFileInfo file, (string newPath, string downloadCompletePath, string downloadIncompletePath) paths, bool overwrite)
+        async Task MoveFileAsync (TorrentFileInfo file, (SpanStringList newPath, SpanStringList downloadCompletePath, SpanStringList downloadIncompletePath) paths, bool overwrite)
         {
             await IOLoop;
 
@@ -729,13 +729,11 @@ namespace MonoTorrent.Client
 
         internal async ReusableTask<long?> GetLengthAsync (ITorrentManagerFile file)
         {
-            await IOLoop;
             return await Cache.Writer.GetLengthAsync (file);
         }
 
         internal async ReusableTask<bool> SetLengthAsync (ITorrentManagerFile file, long length)
         {
-            await IOLoop;
             return await Cache.Writer.SetLengthAsync (file, length);
         }
     }
