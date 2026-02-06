@@ -690,6 +690,8 @@ namespace MonoTorrent.Client
             if (!ContainingDirectory.StartsWith (SavePath))
                 throw new InvalidOperationException ($"The containing directory path '{ContainingDirectory}' must be a subdirectory of '{SavePath}'.");
 
+            var containingDirectoryExists = Directory.Exists (ContainingDirectory);
+
             // All files marked as 'Normal' priority by default so 'PartialProgressSelector'
             // should be set to 'true' for each piece as all files are being downloaded.
             Files = Torrent.Files.Select (file => {
@@ -698,15 +700,18 @@ namespace MonoTorrent.Client
                 string downloadCompleteFullPath = paths.completePath;
                 string downloadIncompleteFullPath = paths.incompletePath;
 
+                var downloadCompleteFullPathExists = File.Exists (downloadCompleteFullPath);
                 // FIXME: Is this the best place to futz with actually moving files?
                 if (!Engine!.Settings.UsePartialFiles) {
-                    if (File.Exists (downloadIncompleteFullPath) && !File.Exists (downloadCompleteFullPath))
+                    if (containingDirectoryExists && File.Exists (downloadIncompleteFullPath) && !downloadCompleteFullPathExists) {
                         File.Move (downloadIncompleteFullPath, downloadCompleteFullPath);
+                        downloadCompleteFullPathExists = true;
+                    }
 
                     paths.incompletePath = paths.completePath;
                 }
 
-                SpanStringList currentPath = File.Exists (downloadCompleteFullPath) ? paths.completePath : paths.incompletePath;
+                SpanStringList currentPath = containingDirectoryExists && downloadCompleteFullPathExists ? paths.completePath : paths.incompletePath;
                 var torrentFileInfo = new TorrentFileInfo (file, currentPath);
                 torrentFileInfo.UpdatePaths ((currentPath, paths.completePath, paths.incompletePath));
                 return torrentFileInfo;
