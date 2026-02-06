@@ -61,8 +61,13 @@ namespace MonoTorrent
         public BitField (ReadOnlyBitField other)
         {
             Data = new BitFieldData (other.Length);
-            Data.TrueCount = other.TrueCount;
-            other.Span.CopyTo (Span);
+            if (other.AllTrue)
+                Data.SetAll (true);
+            else if (!other.AllFalse) {
+                Data.TrueCount = other.TrueCount;
+                Data.InitDataIfNeeded ();
+                other.Span.CopyTo (Span);
+            }
         }
 
         public BitField (ReadOnlySpan<byte> array, int length)
